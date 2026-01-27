@@ -1,0 +1,19 @@
+# Environments
+.venv/
+venv/
+env/
+ENV/
+.ENV/
+
+# VSCode-Einstellungen
+.vscode/
+
+# Python Cache und kompilierte Dateien
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# MacOS
+.DS_Store
