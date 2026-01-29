@@ -233,6 +233,12 @@ def build_and_save_merged_df(
 ) -> pd.DataFrame:
     """
     Convenience wrapper: builds merged_df and writes it to data/merged_df.csv (default).
+
+    - Builds the merged dataset for the given year range
+    - Writes the result to CSV (default: data/merged_df.csv)
+    - Ensures the output directory exists
+    - Returns the merged DataFrame for further use
+
     """
     data_dir = Path(data_dir)
     if output_csv is None:
