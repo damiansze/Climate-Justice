@@ -78,28 +78,37 @@ def _combine_two_countries_mean(
 def clean_data(
     ghg_capita_df: pd.DataFrame,
     gain_df: pd.DataFrame,
+    vul_df: pd.DataFrame,
     gdp_df: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Implements your step 5 (Bereinigung).
     """
     ghg = ghg_capita_df.copy()
     gain = gain_df.copy()
+    vul = vul_df.copy()
     gdp = gdp_df.copy()
 
     # Normalize code columns
     ghg["EDGAR Country Code"] = ghg["EDGAR Country Code"].astype(str).str.strip()
     gain["ISO3"] = gain["ISO3"].astype(str).str.strip()
+    vul["ISO3"] = vul["ISO3"].astype(str).str.strip()
     gdp["ISO3"] = gdp["ISO3"].astype(str).str.strip()
 
     # 1) KNA entfernen
     ghg = ghg[ghg["EDGAR Country Code"] != "KNA"]
     gain = gain[gain["ISO3"] != "KNA"]
+    vul = vul[vul["ISO3"] != "KNA"]
     gdp = gdp[gdp["ISO3"] != "KNA"]
 
     # 2) SRB + MNE -> SCG (jeweils gemittelt)
     gain = _combine_two_countries_mean(
         gain, iso_col="ISO3", name_col="Name",
+        iso_a="SRB", iso_b="MNE",
+        new_iso="SCG", new_name="Serbia and Montenegro"
+    )
+    vul = _combine_two_countries_mean(
+        vul, iso_col="ISO3", name_col="Name",
         iso_a="SRB", iso_b="MNE",
         new_iso="SCG", new_name="Serbia and Montenegro"
     )
@@ -109,9 +118,10 @@ def clean_data(
         new_iso="SCG", new_name="Serbia and Montenegro"
     )
 
-    # 3) AND, LIE, MCO, SMR aus ND-GAIN und GDP löschen
+    # 3) AND, LIE, MCO, SMR aus ND-GAIN, Vulnerability und GDP löschen
     remove_small = ["AND", "LIE", "MCO", "SMR"]
     gain = gain[~gain["ISO3"].isin(remove_small)]
+    vul = vul[~vul["ISO3"].isin(remove_small)]
     gdp = gdp[~gdp["ISO3"].isin(remove_small)]
 
     # 3b) Länder im GHG umbenennen (nur Country-Name; Codes bleiben gleich)
@@ -134,9 +144,10 @@ def clean_data(
         mask = gdp["ISO3"] == iso_code
         gdp.loc[mask, gdp_year_cols] = np.nan
 
-    # 6) NRU, FSM, TUV, MHL aus ND-GAIN und GDP löschen
+    # 6) NRU, FSM, TUV, MHL aus ND-GAIN, Vulnerability und GDP löschen
     remove_no_ghg = ["NRU", "FSM", "TUV", "MHL"]
     gain = gain[~gain["ISO3"].isin(remove_no_ghg)]
+    vul = vul[~vul["ISO3"].isin(remove_no_ghg)]
     gdp = gdp[~gdp["ISO3"].isin(remove_no_ghg)]
 
     # 7) Länder nur in GHG entfernen
@@ -147,7 +158,7 @@ def clean_data(
     }
     ghg = ghg[~ghg["EDGAR Country Code"].isin(countries_only_in_ghg)]
 
-    return ghg.reset_index(drop=True), gain.reset_index(drop=True), gdp.reset_index(drop=True)
+    return ghg.reset_index(drop=True), gain.reset_index(drop=True), vul.reset_index(drop=True), gdp.reset_index(drop=True)
 
 
 def to_long_format(
@@ -180,9 +191,10 @@ def build_merged_df(
 
     ghg_capita_df = pd.read_csv(data_dir / "EDGAR_GHG_per_capita.csv")
     gain_df = pd.read_csv(data_dir / "gain.csv")
+    vul_df = pd.read_csv(data_dir / "vulnerability.csv")
     gdp_df = pd.read_csv(data_dir / "gdp_input.csv")
 
-    ghg, gain, gdp = clean_data(ghg_capita_df, gain_df, gdp_df)
+    ghg, gain, vul, gdp = clean_data(ghg_capita_df, gain_df, vul_df, gdp_df)
 
     years_to_keep = [str(y) for y in range(year_start, year_end + 1)]
 
@@ -202,6 +214,14 @@ def build_merged_df(
         years_to_keep=years_to_keep,
     )
 
+    # Vulnerability long
+    vul_long = to_long_format(
+        vul,
+        id_vars=["ISO3", "Name"],
+        value_name="Vulnerability",
+        years_to_keep=years_to_keep,
+    )
+
     # GDP long
     gdp_long = to_long_format(
         gdp,
@@ -213,6 +233,10 @@ def build_merged_df(
     # Merge: GHG as base (Country names from GHG)
     merged_df = ghg_long.merge(
         gain_long[["ISO3", "Year", "ND_GAIN"]],
+        on=["ISO3", "Year"],
+        how="left",
+    ).merge(
+        vul_long[["ISO3", "Year", "Vulnerability"]],
         on=["ISO3", "Year"],
         how="left",
     ).merge(
