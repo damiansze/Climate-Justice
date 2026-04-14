@@ -18,5 +18,9 @@ build/
 # MacOS
 .DS_Store
 
-# Wöndows/Pycharm
+# Windows/Pycharm
 .idea/
+
+# Other
+Modulbeschreibung.md
+Project_Pitch.md
